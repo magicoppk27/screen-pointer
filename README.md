@@ -35,6 +35,7 @@ scripts/install.sh
 ```bash
 scripts/build-app.sh          # build only → build/Screen Pointer.app (pass "debug" for a debug build)
 scripts/make-icon.sh          # regenerate Resources/AppIcon.{png,icns} from scripts/make-icon.swift
+scripts/setup-signing.sh      # create/unlock the signing certificate (build-app.sh runs it for you)
 ```
 
 `swift build` by itself produces a bare executable. Use the scripts to get a real `.app`
@@ -45,10 +46,11 @@ bundle (`LSUIElement`, bundle ID, code signature), which macOS needs before it w
 - **Input Monitoring** is required for the keystroke overlay. The app asks the first time
   you turn the overlay on.
 - The cursor highlight, drawing, and hotkeys need no permissions.
-- By default builds are ad-hoc signed, so macOS forgets the Input Monitoring grant after
-  every rebuild. To keep it, sign with a stable self-signed certificate:
-  `SIGN_IDENTITY="<certificate name>" scripts/install.sh`. [CLAUDE.md](CLAUDE.md) has
-  the setup steps. The certificate stays outside git, in `.signing/`.
+- Builds are signed with a stable self-signed certificate that `scripts/setup-signing.sh`
+  creates on the first build, in `.signing/` (not in git). macOS therefore remembers the
+  Input Monitoring grant across rebuilds: grant it once per Mac. Back up `.signing/` if you
+  want to reuse the same certificate on another Mac without granting it again. See
+  [CLAUDE.md](CLAUDE.md) for details.
 
 ## Toolchain note
 

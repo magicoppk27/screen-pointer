@@ -19,8 +19,9 @@ with `ditto`, deletes `build/Screen Pointer.app` (so Spotlight/Launchpad don't s
 and opens the installed app. Check success with `pgrep -lf ScreenPointer`. The path should be
 under `/Applications`.
 
-If a stable signing certificate is set up (see below), install with
-`SIGN_IDENTITY="Screen Pointer Local Signing" scripts/install.sh` instead.
+Signing is automatic. On the first build `scripts/setup-signing.sh` creates a stable self-signed
+identity in `.signing/` (gitignored), and every build is signed with it. On a new Mac the
+user grants Input Monitoring once after the first install, and it then survives rebuilds.
 
 ## Prerequisites
 
@@ -69,54 +70,37 @@ If a stable signing certificate is set up (see below), install with
   (a listen-only `CGEventTap`, checked with `CGPreflightListenEventAccess`). Cursor highlight,
   drawing and hotkeys need no permissions. The app does **not** use Screen Recording,
   Accessibility or the Microphone.
-- **Ad-hoc signing (the default, `codesign --sign -`) makes macOS forget the permission after
+- **Ad-hoc signing (`codesign --sign -`, no longer used here) makes macOS forget the permission after
   every rebuild.** TCC identifies ad-hoc apps by cdhash, which changes with every build, so the
   grant goes stale and the user gets stuck re-granting. Toggling the switch in System Settings
   doesn't replace a stale entry; delete it, or run
   `tccutil reset ListenEvent local.screenpointer.ScreenPointer`.
-- **Fix: sign with a stable self-signed certificate kept outside git** in `.signing/` (which is
-  gitignored). This is not set up for this project yet. One-time setup from the repo root:
-
-  ```bash
-  mkdir -p .signing && cd .signing
-  PW="$(openssl rand -hex 16)"; printf %s "$PW" > keychain-password; chmod 600 keychain-password
-  cat > cert.cnf <<'EOF'
-  [req]
-  distinguished_name = dn
-  x509_extensions = ext
-  prompt = no
-  [dn]
-  CN = Screen Pointer Local Signing
-  [ext]
-  basicConstraints = critical,CA:false
-  keyUsage = critical,digitalSignature
-  extendedKeyUsage = critical,codeSigning
-  EOF
-  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -config cert.cnf -keyout key.pem -out cert.pem
-  openssl pkcs12 -export -inkey key.pem -in cert.pem -out signing.p12 -passout pass:"$PW"
-  KC="$PWD/signing.keychain-db"
-  security create-keychain -p "$PW" "$KC"
-  security set-keychain-settings "$KC"            # no auto-lock timeout
-  security unlock-keychain -p "$PW" "$KC"
-  security import signing.p12 -k "$KC" -P "$PW" -T /usr/bin/codesign
-  security set-key-partition-list -S apple-tool:,apple: -s -k "$PW" "$KC"
-  security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
-  rm key.pem signing.p12
-  cd .. && SIGN_IDENTITY="Screen Pointer Local Signing" scripts/install.sh
-  ```
-
-  - If `openssl pkcs12` fails to import (OpenSSL 3 instead of the system LibreSSL), add `-legacy`.
-  - Verify with `codesign -dr - "/Applications/Screen Pointer.app"`. It must show
-    `certificate leaf = H"…"`, not `cdhash H"…"`.
-  - After switching from ad-hoc to the certificate, reset the old grant once
-    (`tccutil reset ListenEvent local.screenpointer.ScreenPointer`), then grant again.
-  - To diagnose permission loops, run `log show --last 5m --predicate 'process == "tccd"'` and look
-    for `Failed to match existing code requirement`.
-  - If the keychain is locked after a reboot, unlock it with
-    `security unlock-keychain -p "$(cat .signing/keychain-password)" .signing/signing.keychain-db`.
-  - `.signing/` is not on GitHub. Back it up separately. On a new Mac either restore it (and
-    add the keychain to the search list again) or create a new certificate and grant the
-    permission again.
+- **Fix (in place): every build is signed with a stable self-signed certificate.**
+  `scripts/build-app.sh` calls `scripts/setup-signing.sh`, which:
+  - on first run, creates `.signing/` (gitignored, mode 700) with a "Screen Pointer Local
+    Signing" code-signing certificate (RSA 2048, 10 years) in its own keychain,
+    `.signing/signing.keychain-db`. The keychain password is in `.signing/keychain-password`;
+    the private key exists only inside that keychain.
+  - adds that keychain to the user keychain search list (the original list is saved in
+    `.signing/search-list-backup.txt`), unlocks it and prints the identity's SHA-1, which
+    `codesign --keychain … --sign <sha1>` uses.
+  - is idempotent. Later runs only re-add and unlock the keychain (it locks after a reboot).
+- Override with `SIGN_IDENTITY="<name or sha1>" scripts/install.sh`, or `SIGN_IDENTITY=-` for
+  ad-hoc (permissions will then be lost on every rebuild).
+- Verify: `codesign -dr - "/Applications/Screen Pointer.app"` must show
+  `identifier "local.screenpointer.ScreenPointer" and certificate leaf = H"…"`, not `cdhash H"…"`.
+  The leaf hash must stay the same across rebuilds.
+- **New Mac / new certificate:** a different certificate means a different requirement, so the
+  old grant doesn't match. Install, then turn on Show Keystrokes and grant Input Monitoring once.
+  If an older entry is stuck (switch on but the overlay still asks), run
+  `tccutil reset ListenEvent local.screenpointer.ScreenPointer` and grant again. Toggling the
+  switch in System Settings never replaces a stale entry.
+- To diagnose permission loops, run `log show --last 5m --predicate 'process == "tccd"'` and look
+  for `Failed to match existing code requirement`.
+- To keep the *same* certificate on another Mac (no re-grant), copy `.signing/` into the clone
+  before the first build. Back up `.signing/` separately; it is intentionally not on GitHub.
+- If `security import` rejects the .p12 (e.g. OpenSSL 3 instead of the system LibreSSL is first
+  on `PATH`), add `-legacy` to the `openssl pkcs12` call in `setup-signing.sh`.
 
 ## Repo hygiene
 
