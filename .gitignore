@@ -1,0 +1,38 @@
+# Build output
+.build/
+build/
+dist/
+DerivedData/
+*.xcarchive
+node_modules/
+.swiftpm/
+
+# Signing material — never commit (back up .signing/ separately)
+.signing/
+*.keychain
+*.keychain-db
+*.p12
+*.pfx
+*.pem
+*.key
+*.cer
+*.crt
+*.csr
+*.mobileprovision
+*.provisionprofile
+keychain-password
+
+# Secrets
+.env
+.env.*
+*.secret
+*.token
+secrets/
+credentials*.json
+
+# Claude Code local state
+.claude/worktrees/
+.claude/settings.local.json
+
+# macOS
+.DS_Store
