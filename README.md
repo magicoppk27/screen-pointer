@@ -36,10 +36,27 @@ scripts/install.sh
 scripts/build-app.sh          # build only → build/Screen Pointer.app (pass "debug" for a debug build)
 scripts/make-icon.sh          # regenerate Resources/AppIcon.{png,icns} from scripts/make-icon.swift
 scripts/setup-signing.sh      # create/unlock the signing certificate (build-app.sh runs it for you)
+scripts/make-dmg.sh           # shareable installer → dist/ScreenPointer-<version>-arm64.dmg
 ```
 
 `swift build` by itself produces a bare executable. Use the scripts to get a real `.app`
 bundle (`LSUIElement`, bundle ID, code signature), which macOS needs before it will grant permissions.
+
+## Sharing with others
+
+```bash
+scripts/make-dmg.sh
+```
+
+This creates `dist/ScreenPointer-<version>-arm64.dmg` (plus a `.sha256` checksum). The disk
+image contains the app, an Applications shortcut to drag it onto, and a "How to Install.txt"
+for recipients. It works on Apple silicon Macs running macOS 14+.
+
+The app isn't notarized (that needs a paid Apple Developer ID), so on first launch macOS
+says it can't verify the app. Recipients approve it once in **System Settings → Privacy &
+Security → Open Anyway**; the included instructions walk them through it. Releases are all
+signed with the same certificate, so updating keeps their Input Monitoring grant. Bump
+`CFBundleShortVersionString` in `Resources/Info.plist` before building a new release.
 
 ## Permissions
 

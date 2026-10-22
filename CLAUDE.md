@@ -102,6 +102,21 @@ user grants Input Monitoring once after the first install, and it then survives 
 - If `security import` rejects the .p12 (e.g. OpenSSL 3 instead of the system LibreSSL is first
   on `PATH`), add `-legacy` to the `openssl pkcs12` call in `setup-signing.sh`.
 
+## Shareable installer
+
+- `scripts/make-dmg.sh` produces `dist/ScreenPointer-<version>-arm64.dmg` (gitignored), with
+  the app, an `/Applications` symlink and "How to Install.txt", plus a `.sha256` checksum. The
+  version comes from `CFBundleShortVersionString` in `Resources/Info.plist`. The script fails
+  if the binary isn't arm64-only.
+- The default signature is the local self-signed identity, which is **not notarized**: `spctl`
+  reports `rejected` for a downloaded (quarantined) copy, and that is expected. Recipients use
+  System Settings → Privacy & Security → "Open Anyway" once (macOS 15+ removed the
+  right-click → Open bypass). Always share DMGs built with the same `.signing/` certificate, so
+  recipients keep their Input Monitoring grant across updates.
+- An optional notarized path exists (`SIGN_IDENTITY="Developer ID Application: …"
+  NOTARY_PROFILE=<notarytool profile>`), but it has never been run. The user has no Developer ID
+  yet.
+
 ## Repo hygiene
 
 - Never commit `.signing/`, keychains, `*.p12`/`*.pem`/`*.key`/`*.cer`, provisioning profiles,
