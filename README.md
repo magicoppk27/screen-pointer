@@ -1,5 +1,18 @@
 # Screen Pointer
 
+## Install (Apple silicon Mac, macOS 14+)
+
+Paste this into Terminal. It downloads the latest release, checks its checksum, installs it to
+Applications and opens it. Run it again any time to update.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/magicoppk27/screen-pointer/main/scripts/web-install.sh | bash
+```
+
+Or download `ScreenPointer-arm64.dmg` from [Releases](https://github.com/magicoppk27/screen-pointer/releases/latest)
+and drag the app to Applications. The DMG route needs a one-time **Open Anyway** in System
+Settings → Privacy & Security, because the app isn't notarized.
+
 A menu-bar macOS app (macOS 14+) for presentations and screen recordings, inspired by
 ScreenCursor. It's a new implementation in Swift/SwiftUI and doesn't reuse any of
 ScreenCursor's code.
@@ -11,6 +24,7 @@ ScreenCursor's code.
 | Cursor highlight | Click-through halo that follows the mouse, changes color on left/right click with a ripple, and fades when the mouse is idle | ⌃⌥C |
 | Keystroke overlay | Listen-only `CGEventTap`; shortcuts appear as chips, plain typing merges into one line, everything fades after 2 s | ⌃⌥K |
 | Draw on screen | Full-screen canvas on the screen under the mouse: pen, line, arrow, rectangle, ellipse, numbered markers, 8 colors, 3 widths, undo, clear, click-through | ⌃⌥D |
+| Magnifier | Round lens that follows the cursor (ScreenCaptureKit). Tap to toggle, hold for a lens that shows only while held; ⌃⌥= / ⌃⌥− zoom 1.5–10× while it's showing. Map a mouse button to ⌃⌥M for hold-to-magnify | ⌃⌥M |
 
 Exit drawing with Esc, a right-click, or the ✕ on the toolbar. Settings (colors, sizes,
 opacity) are in the menu-bar icon → Settings… and are saved to UserDefaults.
@@ -37,6 +51,8 @@ scripts/build-app.sh          # build only → build/Screen Pointer.app (pass "d
 scripts/make-icon.sh          # regenerate Resources/AppIcon.{png,icns} from scripts/make-icon.swift
 scripts/setup-signing.sh      # create/unlock the signing certificate (build-app.sh runs it for you)
 scripts/make-dmg.sh           # shareable installer → dist/ScreenPointer-<version>-arm64.dmg
+scripts/release.sh            # build the DMG and publish GitHub release v<version>
+scripts/web-install.sh        # what the one-line Terminal installer runs
 ```
 
 `swift build` by itself produces a bare executable. Use the scripts to get a real `.app`
@@ -55,17 +71,24 @@ for recipients. It works on Apple silicon Macs running macOS 14+.
 The app isn't notarized (that needs a paid Apple Developer ID), so on first launch macOS
 says it can't verify the app. Recipients approve it once in **System Settings → Privacy &
 Security → Open Anyway**; the included instructions walk them through it. Releases are all
-signed with the same certificate, so updating keeps their Input Monitoring grant. Bump
+signed with the same certificate, so updating keeps their permissions. Bump
 `CFBundleShortVersionString` in `Resources/Info.plist` before building a new release.
+
+To publish a release, commit everything, bump the version, then run `scripts/release.sh`. It
+uploads `ScreenPointer-arm64.dmg` and its `.sha256` under fixed names, so
+`releases/latest/download/…`, and therefore the one-line installer, always gets the newest one.
 
 ## Permissions
 
 - **Input Monitoring** is required for the keystroke overlay. The app asks the first time
   you turn the overlay on.
+- **Screen Recording** is required for the magnifier, to see what's under the cursor. Nothing is
+  recorded or saved. The lens leaves out Screen Pointer's own windows, so it doesn't magnify
+  drawings or keystroke bubbles. macOS may ask to reopen the app after you grant it.
 - The cursor highlight, drawing, and hotkeys need no permissions.
 - Builds are signed with a stable self-signed certificate that `scripts/setup-signing.sh`
   creates on the first build, in `.signing/` (not in git). macOS therefore remembers the
-  Input Monitoring grant across rebuilds: grant it once per Mac. Back up `.signing/` if you
+  Input Monitoring and Screen Recording grants across rebuilds: grant them once per Mac. Back up `.signing/` if you
   want to reuse the same certificate on another Mac without granting it again. See
   [CLAUDE.md](CLAUDE.md) for details.
 
@@ -84,7 +107,8 @@ Sources/ScreenPointer/
   CursorHighlight.swift    Mouse-following halo + click colors
   KeystrokeOverlay.swift   Event tap + keystroke HUD
   DrawMode.swift           Canvas window, tools, renderer, toolbar
-  HotKeys.swift            Carbon global hotkeys
+  HotKeys.swift            Carbon global hotkeys (press + release)
+  Magnifier.swift          ScreenCaptureKit lens
   SettingsWindow.swift     Settings UI
   Support.swift            Overlay panel, color hex, permissions helpers
 ```

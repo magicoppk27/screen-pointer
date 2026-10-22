@@ -24,9 +24,11 @@ final class SettingsWindowController {
 final class PermissionStatus: ObservableObject {
     static let shared = PermissionStatus()
     @Published private(set) var hasInputMonitoring = Permissions.hasInputMonitoring
+    @Published private(set) var hasScreenRecording = Permissions.hasScreenRecording
 
     func refresh() {
         hasInputMonitoring = Permissions.hasInputMonitoring
+        hasScreenRecording = Permissions.hasScreenRecording
     }
 }
 
@@ -67,10 +69,27 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Magnifier") {
+                SliderRow(title: "Zoom", value: $settings.magnifierZoom, range: 1.5...10, format: "%.1f×")
+                SliderRow(title: "Lens size", value: $settings.magnifierSize, range: 120...520, format: "%.0f pt")
+                LabeledContent("Screen Recording") {
+                    if permissions.hasScreenRecording {
+                        Label("Granted", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    } else {
+                        Button("Open System Settings") { Permissions.openScreenRecordingSettings() }
+                    }
+                }
+                Text("Tap ⌃⌥M to toggle the lens, or hold it to show the lens only while held. To use a mouse button, map it to ⌃⌥M in your mouse's software.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Shortcuts") {
                 LabeledContent("Toggle cursor highlight", value: "⌃⌥C")
                 LabeledContent("Toggle keystrokes", value: "⌃⌥K")
                 LabeledContent("Draw on screen", value: "⌃⌥D")
+                LabeledContent("Magnifier (tap or hold)", value: "⌃⌥M")
+                LabeledContent("Zoom in / out (lens showing)", value: "⌃⌥=  ⌃⌥-")
             }
 
             Section {
@@ -78,7 +97,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 680)
+        .frame(width: 460, height: 760)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             permissions.refresh()
         }

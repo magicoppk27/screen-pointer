@@ -44,8 +44,22 @@ user grants Input Monitoring once after the first install, and it then survives 
   script after changing the drawing.
 - Settings persist in UserDefaults under the bundle ID.
 - Hotkeys (Carbon `RegisterEventHotKey`, no permission needed): ⌃⌥C cursor highlight, ⌃⌥K
-  keystrokes, ⌃⌥D draw mode. If another app holds a combo, registration fails and the app
+  keystrokes, ⌃⌥D draw mode, ⌃⌥M magnifier. A tap of ⌃⌥M toggles the lens; holding it for 0.35 s
+  or more makes the lens momentary, using `kEventHotKeyReleased`. ⌃⌥= / ⌃⌥- are registered only
+  while the lens is showing (`HotKeyCenter.add/remove`). If another app holds a combo, registration fails and the app
   logs `Screen Pointer: hotkey N is already taken`.
+
+## Magnifier
+
+- `Magnifier.swift`: ScreenCaptureKit `SCStream` of the whole display under the mouse at native
+  pixels, 60 fps. The IOSurface goes into a `CALayer`, and `contentsRect` crops it around the
+  cursor. On macOS `contentsRect` y=0 is the bottom of the image (verified), the same as Cocoa
+  screen coordinates. The stream restarts when the mouse moves to another display.
+- The filter excludes the whole app (`excludingApplications: [own pid]`) so the lens never
+  magnifies itself. Side effect: drawings and keystroke bubbles aren't magnified. Excluding
+  only the lens window was racy, because the window may not be in `SCShareableContent` yet.
+- `showsCursor = false`, because the real cursor already sits at the lens centre.
+- Verified working by the user on 2026-10-22 (v0.2.0).
 
 ## Gotchas
 
@@ -70,6 +84,11 @@ user grants Input Monitoring once after the first install, and it then survives 
   (a listen-only `CGEventTap`, checked with `CGPreflightListenEventAccess`). Cursor highlight,
   drawing and hotkeys need no permissions. The app does **not** use Screen Recording,
   Accessibility or the Microphone.
+- **Screen Recording** (`ScreenCapture`, `CGPreflightScreenCaptureAccess`) is needed for the
+  magnifier. `CGRequestScreenCaptureAccess` shows the system prompt once. After that the app shows
+  an alert linking to `Privacy_ScreenCapture`. macOS may require relaunching the app after the
+  grant. The same stable-signing rules apply. Reset with
+  `tccutil reset ScreenCapture local.screenpointer.ScreenPointer`.
 - **Ad-hoc signing (`codesign --sign -`, no longer used here) makes macOS forget the permission after
   every rebuild.** TCC identifies ad-hoc apps by cdhash, which changes with every build, so the
   grant goes stale and the user gets stuck re-granting. Toggling the switch in System Settings
@@ -101,6 +120,20 @@ user grants Input Monitoring once after the first install, and it then survives 
   before the first build. Back up `.signing/` separately; it is intentionally not on GitHub.
 - If `security import` rejects the .p12 (e.g. OpenSSL 3 instead of the system LibreSSL is first
   on `PATH`), add `-legacy` to the `openssl pkcs12` call in `setup-signing.sh`.
+
+## Releases and the one-line installer
+
+- The repo is **public** (the user made it public on 2026-10-22 and is fine with that).
+- `scripts/release.sh`: refuses to run with uncommitted changes or an existing tag. It runs
+  `make-dmg.sh`, pushes, and creates GitHub release `v<CFBundleShortVersionString>` with the
+  assets `ScreenPointer-arm64.dmg` and `ScreenPointer-arm64.dmg.sha256` (fixed names, so
+  `releases/latest/download/…` always resolves). Bump the version (and `CFBundleVersion`) first.
+- `scripts/web-install.sh` is what users run:
+  `curl -fsSL https://raw.githubusercontent.com/magicoppk27/screen-pointer/main/scripts/web-install.sh | bash`.
+  It checks arm64 and macOS 14+, downloads the latest DMG, verifies the SHA-256, installs to
+  /Applications (or ~/Applications if it isn't writable), strips quarantine, verifies the
+  signature and opens the app. Files downloaded with curl aren't quarantined, so there's no
+  Gatekeeper "Open Anyway" step.
 
 ## Shareable installer
 

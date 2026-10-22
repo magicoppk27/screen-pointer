@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 private struct MenuContent: View {
     @ObservedObject var settings: AppSettings
+    @ObservedObject var magnifier = MagnifierController.shared
 
     var body: some View {
         Toggle("Highlight Cursor", isOn: $settings.cursorEnabled)
@@ -30,6 +31,8 @@ private struct MenuContent: View {
             .keyboardShortcut("k", modifiers: [.control, .option])
         Button("Draw on Screen") { DrawController.shared.toggle() }
             .keyboardShortcut("d", modifiers: [.control, .option])
+        Toggle("Magnifier", isOn: Binding(get: { magnifier.isActive }, set: { _ in magnifier.toggle() }))
+            .keyboardShortcut("m", modifiers: [.control, .option])
         Divider()
         Button("Settings…") { SettingsWindowController.shared.show() }
             .keyboardShortcut(",")

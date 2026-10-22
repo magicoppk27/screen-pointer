@@ -73,7 +73,32 @@ final class InteractiveHostingView<Content: View>: NSHostingView<Content> {
 enum Permissions {
     static let inputMonitoringURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")!
 
+    static let screenRecordingURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!
+
     static var hasInputMonitoring: Bool { CGPreflightListenEventAccess() }
+    static var hasScreenRecording: Bool { CGPreflightScreenCaptureAccess() }
+
+    static func openScreenRecordingSettings() {
+        NSWorkspace.shared.open(screenRecordingURL)
+    }
+
+    /// Shows the system prompt the first time; afterwards explains how to enable it.
+    static func requestScreenRecording() {
+        if CGRequestScreenCaptureAccess() { return }
+        NSApp.activate()
+        let alert = NSAlert()
+        alert.messageText = "Screen Recording permission needed"
+        alert.informativeText = """
+        The magnifier needs Screen Recording to see what's under the cursor. Nothing is recorded or saved.
+        Enable Screen Pointer in System Settings → Privacy & Security → Screen & System Audio Recording. \
+        If macOS asks, let it quit and reopen Screen Pointer, then press ⌃⌥M again.
+        """
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            openScreenRecordingSettings()
+        }
+    }
 
     static func openInputMonitoringSettings() {
         NSWorkspace.shared.open(inputMonitoringURL)

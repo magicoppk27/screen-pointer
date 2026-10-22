@@ -19,6 +19,8 @@ final class AppSettings: ObservableObject {
         static let keystrokeFontSize = 28.0
         static let drawColor = Color(hex: "#FF453A")
         static let drawLineWidth = 5.0
+        static let magnifierZoom = 2.5
+        static let magnifierSize = 260.0
     }
 
     // Cursor highlight
@@ -39,6 +41,10 @@ final class AppSettings: ObservableObject {
     @Published var drawColor: Color { didSet { save(drawColor.hexString, "drawColor") } }
     @Published var drawLineWidth: Double { didSet { save(drawLineWidth, "drawLineWidth") } }
 
+    // Magnifier
+    @Published var magnifierZoom: Double { didSet { save(magnifierZoom, "magnifierZoom") } }
+    @Published var magnifierSize: Double { didSet { save(magnifierSize, "magnifierSize") } }
+
     private init() {
         let d = Self.store
         cursorEnabled = d.object(forKey: "cursorEnabled") as? Bool ?? Default.cursorEnabled
@@ -53,6 +59,8 @@ final class AppSettings: ObservableObject {
         keystrokeFontSize = d.object(forKey: "keystrokeFontSize") as? Double ?? Default.keystrokeFontSize
         drawColor = d.string(forKey: "drawColor").map(Color.init(hex:)) ?? Default.drawColor
         drawLineWidth = d.object(forKey: "drawLineWidth") as? Double ?? Default.drawLineWidth
+        magnifierZoom = d.object(forKey: "magnifierZoom") as? Double ?? Default.magnifierZoom
+        magnifierSize = d.object(forKey: "magnifierSize") as? Double ?? Default.magnifierSize
     }
 
     func resetAppearance() {
@@ -66,6 +74,8 @@ final class AppSettings: ObservableObject {
         keystrokeFontSize = Default.keystrokeFontSize
         drawColor = Default.drawColor
         drawLineWidth = Default.drawLineWidth
+        magnifierZoom = Default.magnifierZoom
+        magnifierSize = Default.magnifierSize
     }
 
     private func save(_ value: Any, _ key: String) {
