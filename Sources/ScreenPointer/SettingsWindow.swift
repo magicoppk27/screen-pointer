@@ -79,7 +79,7 @@ struct SettingsView: View {
                         Button("Open System Settings") { Permissions.openScreenRecordingSettings() }
                     }
                 }
-                Text("Tap ⌃⌥M to toggle the lens, or hold it to show the lens only while held. To use a mouse button, map it to ⌃⌥M in your mouse's software.")
+                Text("Tap ⌃⌥M to toggle the lens, or hold it to show the lens only while held. Esc or X closes it. To use a mouse button, map it to ⌃⌥M in your mouse's software.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -90,6 +90,7 @@ struct SettingsView: View {
                 LabeledContent("Draw on screen", value: "⌃⌥D")
                 LabeledContent("Magnifier (tap or hold)", value: "⌃⌥M")
                 LabeledContent("Zoom in / out (lens showing)", value: "⌃⌥=  ⌃⌥-")
+                LabeledContent("Close lens", value: "Esc or X")
             }
 
             Section {

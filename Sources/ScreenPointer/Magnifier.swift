@@ -13,7 +13,8 @@ import ScreenCaptureKit
 /// the cursor with `contentsRect`. Nothing is recorded or saved.
 ///
 /// ⌃⌥M: a quick tap toggles the lens; holding it shows the lens only while held (this also
-/// works with a mouse button mapped to ⌃⌥M). ⌃⌥= / ⌃⌥- zoom while the lens is visible.
+/// works with a mouse button mapped to ⌃⌥M). While the lens is visible, ⌃⌥= / ⌃⌥- zoom and
+/// Esc or X close it.
 final class MagnifierController: NSObject, ObservableObject, SCStreamOutput, SCStreamDelegate {
     static let shared = MagnifierController()
 
@@ -39,6 +40,7 @@ final class MagnifierController: NSObject, ObservableObject, SCStreamOutput, SCS
     // MARK: Hotkey behaviour
 
     func hotKeyPressed() {
+        NSLog("Screen Pointer: magnifier hotkey pressed (active: \(isActive))")
         pressedAt = Date()
         if isActive {
             activatedByThisPress = false
@@ -53,6 +55,7 @@ final class MagnifierController: NSObject, ObservableObject, SCStreamOutput, SCS
         defer { pressedAt = nil }
         guard activatedByThisPress, let pressedAt,
               Date().timeIntervalSince(pressedAt) >= holdThreshold else { return }
+        NSLog("Screen Pointer: magnifier hotkey held, closing on release")
         stop() // held → momentary
     }
 
@@ -69,6 +72,7 @@ final class MagnifierController: NSObject, ObservableObject, SCStreamOutput, SCS
             return
         }
         isActive = true
+        NSLog("Screen Pointer: magnifier on")
 
         let p = OverlayPanel(size: .zero)
         let host = NSView()
@@ -83,10 +87,6 @@ final class MagnifierController: NSObject, ObservableObject, SCStreamOutput, SCS
         lensLayer.backgroundColor = NSColor.black.cgColor
         ringLayer.fillColor = nil
         ringLayer.strokeColor = NSColor.white.withAlphaComponent(0.9).cgColor
-        ringLayer.shadowColor = NSColor.black.cgColor
-        ringLayer.shadowOpacity = 0.5
-        ringLayer.shadowRadius = 6
-        ringLayer.shadowOffset = .zero
         applyLensSize()
         p.orderFrontRegardless()
 
@@ -104,6 +104,8 @@ final class MagnifierController: NSObject, ObservableObject, SCStreamOutput, SCS
 
         HotKeyCenter.shared.add(.zoomIn, keyCode: kVK_ANSI_Equal) { [weak self] in self?.zoom(by: self?.zoomStep ?? 1) }
         HotKeyCenter.shared.add(.zoomOut, keyCode: kVK_ANSI_Minus) { [weak self] in self?.zoom(by: 1 / (self?.zoomStep ?? 1)) }
+        HotKeyCenter.shared.add(.closeEscape, keyCode: kVK_Escape, modifiers: 0) { [weak self] in self?.stop() }
+        HotKeyCenter.shared.add(.closeX, keyCode: kVK_ANSI_X, modifiers: 0) { [weak self] in self?.stop() }
 
         update() // starts capture for the screen under the mouse
     }
@@ -111,8 +113,11 @@ final class MagnifierController: NSObject, ObservableObject, SCStreamOutput, SCS
     func stop() {
         guard isActive else { return }
         isActive = false
+        NSLog("Screen Pointer: magnifier off")
         HotKeyCenter.shared.remove(.zoomIn)
         HotKeyCenter.shared.remove(.zoomOut)
+        HotKeyCenter.shared.remove(.closeEscape)
+        HotKeyCenter.shared.remove(.closeX)
         monitors.forEach(NSEvent.removeMonitor)
         monitors.removeAll()
         settingsSink = nil

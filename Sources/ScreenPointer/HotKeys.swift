@@ -6,12 +6,13 @@ import Foundation
 ///   ⌃⌥K  toggle keystroke overlay
 ///   ⌃⌥D  toggle draw mode
 ///   ⌃⌥M  magnifier (tap to toggle, hold for a momentary lens)
-///   ⌃⌥= / ⌃⌥-  zoom in / out (only registered while the magnifier is showing)
+///   ⌃⌥= / ⌃⌥-  zoom in / out   ┐ only registered while the magnifier is showing,
+///   Esc or X   close the lens   ┘ so they don't affect other apps otherwise
 final class HotKeyCenter {
     static let shared = HotKeyCenter()
 
     enum ID: UInt32 {
-        case cursor = 1, keystrokes, draw, magnifier, zoomIn, zoomOut
+        case cursor = 1, keystrokes, draw, magnifier, zoomIn, zoomOut, closeEscape, closeX
     }
 
     static let controlOption = UInt32(controlKey | optionKey)

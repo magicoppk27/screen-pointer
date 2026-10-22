@@ -45,8 +45,11 @@ user grants Input Monitoring once after the first install, and it then survives 
 - Settings persist in UserDefaults under the bundle ID.
 - Hotkeys (Carbon `RegisterEventHotKey`, no permission needed): ⌃⌥C cursor highlight, ⌃⌥K
   keystrokes, ⌃⌥D draw mode, ⌃⌥M magnifier. A tap of ⌃⌥M toggles the lens; holding it for 0.35 s
-  or more makes the lens momentary, using `kEventHotKeyReleased`. ⌃⌥= / ⌃⌥- are registered only
-  while the lens is showing (`HotKeyCenter.add/remove`). If another app holds a combo, registration fails and the app
+  or more makes the lens momentary, using `kEventHotKeyReleased`. ⌃⌥= / ⌃⌥- (zoom) and plain
+  Esc / X (close, with no modifiers) are registered only while the lens is showing
+  (`HotKeyCenter.add/remove`). While the lens is open they are swallowed system-wide, which the
+  user accepted. The lens ring has no shadow, at the user's request. Open, close and hotkey
+  presses are logged with NSLog (`Screen Pointer: magnifier …`) for diagnosis. If another app holds a combo, registration fails and the app
   logs `Screen Pointer: hotkey N is already taken`.
 
 ## Magnifier

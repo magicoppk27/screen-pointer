@@ -24,7 +24,7 @@ ScreenCursor's code.
 | Cursor highlight | Click-through halo that follows the mouse, changes color on left/right click with a ripple, and fades when the mouse is idle | ⌃⌥C |
 | Keystroke overlay | Listen-only `CGEventTap`; shortcuts appear as chips, plain typing merges into one line, everything fades after 2 s | ⌃⌥K |
 | Draw on screen | Full-screen canvas on the screen under the mouse: pen, line, arrow, rectangle, ellipse, numbered markers, 8 colors, 3 widths, undo, clear, click-through | ⌃⌥D |
-| Magnifier | Round lens that follows the cursor (ScreenCaptureKit). Tap to toggle, hold for a lens that shows only while held; ⌃⌥= / ⌃⌥− zoom 1.5–10× while it's showing. Map a mouse button to ⌃⌥M for hold-to-magnify | ⌃⌥M |
+| Magnifier | Round lens that follows the cursor (ScreenCaptureKit). Tap to toggle, hold for a lens that shows only while held; ⌃⌥= / ⌃⌥− zoom 1.5–10× and Esc or X closes it while it's showing. Map a mouse button to ⌃⌥M for hold-to-magnify | ⌃⌥M |
 
 Exit drawing with Esc, a right-click, or the ✕ on the toolbar. Settings (colors, sizes,
 opacity) are in the menu-bar icon → Settings… and are saved to UserDefaults.
