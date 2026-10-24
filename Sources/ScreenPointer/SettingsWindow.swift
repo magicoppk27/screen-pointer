@@ -13,6 +13,9 @@ final class SettingsWindowController {
             w.styleMask = [.titled, .closable, .miniaturizable]
             w.isReleasedWhenClosed = false
             w.center()
+            NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: w, queue: .main) { _ in
+                ShortcutStore.shared.stopRecording()
+            }
             window = w
         }
         NSApp.activate()
@@ -35,6 +38,7 @@ final class PermissionStatus: ObservableObject {
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject private var permissions = PermissionStatus.shared
+    @ObservedObject private var shortcuts = ShortcutStore.shared
 
     var body: some View {
         Form {
@@ -79,18 +83,24 @@ struct SettingsView: View {
                         Button("Open System Settings") { Permissions.openScreenRecordingSettings() }
                     }
                 }
-                Text("Tap ⌃⌥M to toggle the lens, or hold it to show the lens only while held. Esc or X closes it. To use a mouse button, map it to ⌃⌥M in your mouse's software.")
+                Text("Tap \(shortcuts.shortcut(for: .magnifier).display) to toggle the lens, or hold it to show the lens only while held. Esc or \(shortcuts.shortcut(for: .closeLens).display) closes it. To use a mouse button, map it to \(shortcuts.shortcut(for: .magnifier).display) in your mouse's software.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section("Shortcuts") {
-                LabeledContent("Toggle cursor highlight", value: "⌃⌥C")
-                LabeledContent("Toggle keystrokes", value: "⌃⌥K")
-                LabeledContent("Draw on screen", value: "⌃⌥D")
-                LabeledContent("Magnifier (tap or hold)", value: "⌃⌥M")
-                LabeledContent("Zoom in / out (lens showing)", value: "⌃⌥=  ⌃⌥-")
-                LabeledContent("Close lens", value: "Esc or X")
+                ForEach(ShortcutAction.allCases) { action in
+                    ShortcutRow(action: action, store: shortcuts)
+                }
+                LabeledContent("Close lens (always)", value: "Esc")
+                HStack {
+                    Text("Click a shortcut, then press the new keys.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Reset All") { shortcuts.resetAll() }
+                        .disabled(!ShortcutAction.allCases.contains(where: shortcuts.isCustomized))
+                }
             }
 
             Section {
@@ -98,9 +108,53 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 760)
+        .frame(width: 480, height: 820)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             permissions.refresh()
+        }
+    }
+}
+
+private struct ShortcutRow: View {
+    let action: ShortcutAction
+    @ObservedObject var store: ShortcutStore
+
+    private var isRecording: Bool { store.recording == action }
+
+    var body: some View {
+        LabeledContent {
+            HStack(spacing: 6) {
+                if store.unavailable.contains(action) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .help("Another app is already using this shortcut. Record a different one.")
+                }
+                Button {
+                    isRecording ? store.stopRecording() : store.startRecording(action)
+                } label: {
+                    Text(isRecording ? "Type shortcut…" : store.shortcut(for: action).display)
+                        .font(.system(.body, design: .rounded).weight(.medium))
+                        .frame(minWidth: 96)
+                }
+                .tint(isRecording ? .accentColor : nil)
+                .buttonStyle(.bordered)
+                Button {
+                    store.reset(action)
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                }
+                .buttonStyle(.borderless)
+                .help("Reset to \(action.defaultShortcut.display)")
+                .opacity(store.isCustomized(action) ? 1 : 0)
+                .disabled(!store.isCustomized(action))
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(action.title)
+                if isRecording, let message = store.recordingMessage {
+                    Text(message).font(.caption).foregroundStyle(.orange)
+                }
+            }
         }
     }
 }

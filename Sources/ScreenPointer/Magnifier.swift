@@ -12,9 +12,9 @@ import ScreenCaptureKit
 /// keystrokes) so the lens never magnifies itself, and crops each frame to the region around
 /// the cursor with `contentsRect`. Nothing is recorded or saved.
 ///
-/// ⌃⌥M: a quick tap toggles the lens; holding it shows the lens only while held (this also
-/// works with a mouse button mapped to ⌃⌥M). While the lens is visible, ⌃⌥= / ⌃⌥- zoom and
-/// Esc or X close it.
+/// Magnifier shortcut (default ⌃⌥M): a quick tap toggles the lens; holding it shows the lens
+/// only while held (this also works with a mouse button mapped to it). While the lens is
+/// visible the zoom in/out and close shortcuts (default ⌃⌥= / ⌃⌥- / X) apply, and Esc closes it.
 final class MagnifierController: NSObject, ObservableObject, SCStreamOutput, SCStreamDelegate {
     static let shared = MagnifierController()
 
@@ -102,10 +102,10 @@ final class MagnifierController: NSObject, ObservableObject, SCStreamOutput, SCS
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in self?.applyLensSize(); self?.update() }
 
-        HotKeyCenter.shared.add(.zoomIn, keyCode: kVK_ANSI_Equal) { [weak self] in self?.zoom(by: self?.zoomStep ?? 1) }
-        HotKeyCenter.shared.add(.zoomOut, keyCode: kVK_ANSI_Minus) { [weak self] in self?.zoom(by: 1 / (self?.zoomStep ?? 1)) }
-        HotKeyCenter.shared.add(.closeEscape, keyCode: kVK_Escape, modifiers: 0) { [weak self] in self?.stop() }
-        HotKeyCenter.shared.add(.closeX, keyCode: kVK_ANSI_X, modifiers: 0) { [weak self] in self?.stop() }
+        HotKeyCenter.shared.bind(.zoomIn) { [weak self] in self?.zoom(by: self?.zoomStep ?? 1) }
+        HotKeyCenter.shared.bind(.zoomOut) { [weak self] in self?.zoom(by: 1 / (self?.zoomStep ?? 1)) }
+        HotKeyCenter.shared.bind(.closeLens) { [weak self] in self?.stop() }
+        HotKeyCenter.shared.bindEscape { [weak self] in self?.stop() }
 
         update() // starts capture for the screen under the mouse
     }
@@ -114,10 +114,8 @@ final class MagnifierController: NSObject, ObservableObject, SCStreamOutput, SCS
         guard isActive else { return }
         isActive = false
         NSLog("Screen Pointer: magnifier off")
-        HotKeyCenter.shared.remove(.zoomIn)
-        HotKeyCenter.shared.remove(.zoomOut)
-        HotKeyCenter.shared.remove(.closeEscape)
-        HotKeyCenter.shared.remove(.closeX)
+        HotKeyCenter.shared.unbind([.zoomIn, .zoomOut, .closeLens])
+        HotKeyCenter.shared.bindEscape(nil)
         monitors.forEach(NSEvent.removeMonitor)
         monitors.removeAll()
         settingsSink = nil

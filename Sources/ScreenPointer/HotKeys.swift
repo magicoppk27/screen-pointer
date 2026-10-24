@@ -1,29 +1,40 @@
 import Carbon.HIToolbox
 import Foundation
 
-/// System-wide hotkeys via Carbon's RegisterEventHotKey (no permission needed).
+/// System-wide hotkeys via Carbon's RegisterEventHotKey (no permission needed). The combos come
+/// from ShortcutStore and are editable in Settings → Shortcuts. Defaults:
 ///   ⌃⌥C  toggle cursor highlight
 ///   ⌃⌥K  toggle keystroke overlay
 ///   ⌃⌥D  toggle draw mode
 ///   ⌃⌥M  magnifier (tap to toggle, hold for a momentary lens)
+///   ⌃⌥X  turn off all features (the app keeps running)
 ///   ⌃⌥= / ⌃⌥-  zoom in / out   ┐ only registered while the magnifier is showing,
-///   Esc or X   close the lens   ┘ so they don't affect other apps otherwise
+///   X (and always Esc)  close   ┘ so they don't affect other apps otherwise
 final class HotKeyCenter {
     static let shared = HotKeyCenter()
 
-    enum ID: UInt32 {
-        case cursor = 1, keystrokes, draw, magnifier, zoomIn, zoomOut, closeEscape, closeX
+    private struct Handler {
+        let press: () -> Void
+        let release: (() -> Void)?
     }
 
-    static let controlOption = UInt32(controlKey | optionKey)
+    private struct Registration {
+        let ref: EventHotKeyRef
+        let shortcut: Shortcut
+    }
 
-    private var refs: [UInt32: EventHotKeyRef] = [:]
-    private var pressActions: [UInt32: () -> Void] = [:]
-    private var releaseActions: [UInt32: () -> Void] = [:]
-    private var handler: EventHandlerRef?
+    private static let escapeID: UInt32 = 7
+    private static let escape = Shortcut(keyCode: kVK_Escape, modifiers: 0, key: "Esc")
+
+    private var handlers: [ShortcutAction: Handler] = [:]
+    private var escapeHandler: Handler?
+    private var registered: [UInt32: Registration] = [:]
+    private var handlersByID: [UInt32: Handler] = [:]
+    private var suspended = false
+    private var eventHandler: EventHandlerRef?
 
     func register() {
-        guard handler == nil else { return }
+        guard eventHandler == nil else { return }
         var specs = [
             EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
             EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased)),
@@ -35,42 +46,86 @@ final class HotKeyCenter {
             let released = GetEventKind(event) == UInt32(kEventHotKeyReleased)
             DispatchQueue.main.async { HotKeyCenter.shared.fire(hotKeyID.id, released: released) }
             return noErr
-        }, specs.count, &specs, nil, &handler)
+        }, specs.count, &specs, nil, &eventHandler)
 
-        add(.cursor, keyCode: kVK_ANSI_C) { AppSettings.shared.cursorEnabled.toggle() }
-        add(.keystrokes, keyCode: kVK_ANSI_K) { AppSettings.shared.keystrokesEnabled.toggle() }
-        add(.draw, keyCode: kVK_ANSI_D) { DrawController.shared.toggle() }
-        add(.magnifier, keyCode: kVK_ANSI_M,
-            onPress: { MagnifierController.shared.hotKeyPressed() },
-            onRelease: { MagnifierController.shared.hotKeyReleased() })
+        handlers[.cursor] = Handler(press: { AppSettings.shared.cursorEnabled.toggle() }, release: nil)
+        handlers[.keystrokes] = Handler(press: { AppSettings.shared.keystrokesEnabled.toggle() }, release: nil)
+        handlers[.draw] = Handler(press: { DrawController.shared.toggle() }, release: nil)
+        handlers[.magnifier] = Handler(press: { MagnifierController.shared.hotKeyPressed() },
+                                       release: { MagnifierController.shared.hotKeyReleased() })
+        handlers[.turnOffAll] = Handler(press: { Features.turnOffAll() }, release: nil)
+        rebind()
     }
 
-    func add(_ id: ID, keyCode: Int, modifiers: UInt32 = controlOption,
-             onPress: @escaping () -> Void, onRelease: (() -> Void)? = nil) {
-        guard refs[id.rawValue] == nil else { return }
-        var ref: EventHotKeyRef?
-        let hotKeyID = EventHotKeyID(signature: OSType(0x5350_4E54), id: id.rawValue) // 'SPNT'
-        let status = RegisterEventHotKey(UInt32(keyCode), modifiers, hotKeyID, GetApplicationEventTarget(), 0, &ref)
-        if status == noErr, let ref {
-            refs[id.rawValue] = ref
-            pressActions[id.rawValue] = onPress
-            releaseActions[id.rawValue] = onRelease
-        } else {
-            NSLog("Screen Pointer: hotkey \(id.rawValue) is already taken (status \(status))")
+    /// Binds a lens-only action while the magnifier is showing.
+    func bind(_ action: ShortcutAction, onPress: @escaping () -> Void) {
+        handlers[action] = Handler(press: onPress, release: nil)
+        rebind()
+    }
+
+    func unbind(_ actions: [ShortcutAction]) {
+        actions.forEach { handlers[$0] = nil }
+        rebind()
+    }
+
+    func bindEscape(_ action: (() -> Void)?) {
+        escapeHandler = action.map { Handler(press: $0, release: nil) }
+        rebind()
+    }
+
+    /// Unregisters everything, e.g. while the Settings window records a new shortcut.
+    func suspend() {
+        suspended = true
+        rebind()
+    }
+
+    func resume() {
+        suspended = false
+        rebind()
+    }
+
+    /// Makes the registered hot keys match the current handlers and ShortcutStore. Unchanged
+    /// registrations are left alone, so a hot key that's being held keeps delivering its release.
+    func rebind() {
+        var wanted: [UInt32: (Shortcut, Handler, ShortcutAction?)] = [:]
+        if !suspended {
+            for (action, handler) in handlers {
+                wanted[action.hotKeyID] = (ShortcutStore.shared.shortcut(for: action), handler, action)
+            }
+            if let escapeHandler {
+                wanted[Self.escapeID] = (Self.escape, escapeHandler, nil)
+            }
+        }
+
+        for (id, registration) in registered {
+            if let (shortcut, _, _) = wanted[id], shortcut.collides(with: registration.shortcut) { continue }
+            UnregisterEventHotKey(registration.ref)
+            registered[id] = nil
+        }
+
+        var unavailable = Set<ShortcutAction>()
+        handlersByID = [:]
+        for (id, (shortcut, handler, action)) in wanted {
+            handlersByID[id] = handler
+            guard registered[id] == nil else { continue }
+            var ref: EventHotKeyRef?
+            let hotKeyID = EventHotKeyID(signature: OSType(0x5350_4E54), id: id) // 'SPNT'
+            let status = RegisterEventHotKey(UInt32(shortcut.keyCode), shortcut.modifiers, hotKeyID,
+                                             GetApplicationEventTarget(), 0, &ref)
+            if status == noErr, let ref {
+                registered[id] = Registration(ref: ref, shortcut: shortcut)
+            } else {
+                NSLog("Screen Pointer: hotkey \(shortcut.display) is already taken (status \(status))")
+                if let action { unavailable.insert(action) }
+            }
+        }
+        if !suspended, ShortcutStore.shared.unavailable != unavailable {
+            ShortcutStore.shared.unavailable = unavailable
         }
     }
 
-    func add(_ id: ID, keyCode: Int, action: @escaping () -> Void) {
-        add(id, keyCode: keyCode, onPress: action)
-    }
-
-    func remove(_ id: ID) {
-        if let ref = refs.removeValue(forKey: id.rawValue) { UnregisterEventHotKey(ref) }
-        pressActions[id.rawValue] = nil
-        releaseActions[id.rawValue] = nil
-    }
-
     private func fire(_ id: UInt32, released: Bool) {
-        (released ? releaseActions[id] : pressActions[id])?()
+        guard let handler = handlersByID[id] else { return }
+        if released { handler.release?() } else { handler.press() }
     }
 }

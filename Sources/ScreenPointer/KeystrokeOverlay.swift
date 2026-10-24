@@ -159,6 +159,10 @@ enum KeyFormatter {
         kVK_F7: "F7", kVK_F8: "F8", kVK_F9: "F9", kVK_F10: "F10", kVK_F11: "F11", kVK_F12: "F12",
     ]
 
+    static func specialName(for keyCode: Int) -> String? {
+        special[keyCode]
+    }
+
     /// Space is only special when combined with a modifier.
     static func isSpecial(_ keyCode: Int) -> Bool {
         keyCode != kVK_Space && special[keyCode] != nil

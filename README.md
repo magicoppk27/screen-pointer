@@ -19,12 +19,17 @@ ScreenCursor's code.
 
 ## Features
 
-| Feature | How | Hotkey |
+| Feature | How | Default shortcut |
 | --- | --- | --- |
 | Cursor highlight | Click-through halo that follows the mouse, changes color on left/right click with a ripple, and fades when the mouse is idle | ⌃⌥C |
 | Keystroke overlay | Listen-only `CGEventTap`; shortcuts appear as chips, plain typing merges into one line, everything fades after 2 s | ⌃⌥K |
 | Draw on screen | Full-screen canvas on the screen under the mouse: pen, line, arrow, rectangle, ellipse, numbered markers, 8 colors, 3 widths, undo, clear, click-through | ⌃⌥D |
 | Magnifier | Round lens that follows the cursor (ScreenCaptureKit). Tap to toggle, hold for a lens that shows only while held; ⌃⌥= / ⌃⌥− zoom 1.5–10× and Esc or X closes it while it's showing. Map a mouse button to ⌃⌥M for hold-to-magnify | ⌃⌥M |
+| Turn off all | Switches every feature off at once (the app stays in the menu bar). Also in the menu | ⌃⌥X |
+
+All shortcuts except Esc can be changed in **Settings → Shortcuts**: click one and press the
+new keys. Global shortcuts must include ⌃, ⌥ or ⌘. Conflicts are rejected, and a ⚠ marks a
+combo that another app already owns.
 
 Exit drawing with Esc, a right-click, or the ✕ on the toolbar. Settings (colors, sizes,
 opacity) are in the menu-bar icon → Settings… and are saved to UserDefaults.
@@ -107,7 +112,8 @@ Sources/ScreenPointer/
   CursorHighlight.swift    Mouse-following halo + click colors
   KeystrokeOverlay.swift   Event tap + keystroke HUD
   DrawMode.swift           Canvas window, tools, renderer, toolbar
-  HotKeys.swift            Carbon global hotkeys (press + release)
+  HotKeys.swift            Carbon global hotkeys (press + release, diff-based rebinding)
+  Shortcuts.swift          Editable shortcuts: model, persistence, recorder
   Magnifier.swift          ScreenCaptureKit lens
   SettingsWindow.swift     Settings UI
   Support.swift            Overlay panel, color hex, permissions helpers
@@ -115,6 +121,5 @@ Sources/ScreenPointer/
 
 ## Ideas for next steps
 
-- Hotkeys you can rebind (e.g. with a shortcut recorder)
 - Text tool and a highlighter or spotlight tool in draw mode
 - Launch at login (`SMAppService.mainApp`)

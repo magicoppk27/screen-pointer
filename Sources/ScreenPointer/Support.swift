@@ -91,7 +91,7 @@ enum Permissions {
         alert.informativeText = """
         The magnifier needs Screen Recording to see what's under the cursor. Nothing is recorded or saved.
         Enable Screen Pointer in System Settings → Privacy & Security → Screen & System Audio Recording. \
-        If macOS asks, let it quit and reopen Screen Pointer, then press ⌃⌥M again.
+        If macOS asks, let it quit and reopen Screen Pointer, then press \(ShortcutStore.shared.shortcut(for: .magnifier).display) again.
         """
         alert.addButton(withTitle: "Open System Settings")
         alert.addButton(withTitle: "Cancel")

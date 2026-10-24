@@ -20,19 +20,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+enum Features {
+    /// Switches off every overlay (highlight, keystrokes, drawing, magnifier). The app stays in
+    /// the menu bar.
+    static func turnOffAll() {
+        AppSettings.shared.cursorEnabled = false
+        AppSettings.shared.keystrokesEnabled = false
+        DrawController.shared.stop()
+        MagnifierController.shared.stop()
+    }
+}
+
 private struct MenuContent: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var magnifier = MagnifierController.shared
+    @ObservedObject var shortcuts = ShortcutStore.shared
 
     var body: some View {
         Toggle("Highlight Cursor", isOn: $settings.cursorEnabled)
-            .keyboardShortcut("c", modifiers: [.control, .option])
+            .keyboardShortcut(shortcuts.shortcut(for: .cursor).keyboardShortcut)
         Toggle("Show Keystrokes", isOn: $settings.keystrokesEnabled)
-            .keyboardShortcut("k", modifiers: [.control, .option])
+            .keyboardShortcut(shortcuts.shortcut(for: .keystrokes).keyboardShortcut)
         Button("Draw on Screen") { DrawController.shared.toggle() }
-            .keyboardShortcut("d", modifiers: [.control, .option])
+            .keyboardShortcut(shortcuts.shortcut(for: .draw).keyboardShortcut)
         Toggle("Magnifier", isOn: Binding(get: { magnifier.isActive }, set: { _ in magnifier.toggle() }))
-            .keyboardShortcut("m", modifiers: [.control, .option])
+            .keyboardShortcut(shortcuts.shortcut(for: .magnifier).keyboardShortcut)
+        Divider()
+        Button("Turn Off All Features") { Features.turnOffAll() }
+            .keyboardShortcut(shortcuts.shortcut(for: .turnOffAll).keyboardShortcut)
         Divider()
         Button("Settings…") { SettingsWindowController.shared.show() }
             .keyboardShortcut(",")

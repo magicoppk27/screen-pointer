@@ -43,12 +43,26 @@ user grants Input Monitoring once after the first install, and it then survives 
   produces `Resources/AppIcon.png` and `Resources/AppIcon.icns` (both committed). Rerun the
   script after changing the drawing.
 - Settings persist in UserDefaults under the bundle ID.
-- Hotkeys (Carbon `RegisterEventHotKey`, no permission needed): ⌃⌥C cursor highlight, ⌃⌥K
-  keystrokes, ⌃⌥D draw mode, ⌃⌥M magnifier. A tap of ⌃⌥M toggles the lens; holding it for 0.35 s
-  or more makes the lens momentary, using `kEventHotKeyReleased`. ⌃⌥= / ⌃⌥- (zoom) and plain
-  Esc / X (close, with no modifiers) are registered only while the lens is showing
-  (`HotKeyCenter.add/remove`). While the lens is open they are swallowed system-wide, which the
-  user accepted. The lens ring has no shadow, at the user's request. Open, close and hotkey
+- Hotkeys (Carbon `RegisterEventHotKey`, no permission needed) are **user-editable** in Settings →
+  Shortcuts (`Shortcuts.swift`: the `ShortcutAction` enum, `ShortcutStore` persisted as JSON under
+  the UserDefaults key `shortcuts`, storing only changed ones). Defaults: ⌃⌥C cursor highlight,
+  ⌃⌥K keystrokes, ⌃⌥D draw mode, ⌃⌥M magnifier, ⌃⌥X turn off all features (`Features.turnOffAll()`:
+  every overlay off, app keeps running), and, lens-only, ⌃⌥= / ⌃⌥- zoom and bare X to close. Esc
+  always closes the lens and isn't editable.
+  - Global actions must include ⌃/⌥/⌘. Lens-only ones may be bare keys, because they're
+    registered only while the lens shows (they're swallowed system-wide during that time, which
+    the user accepted).
+  - Recording uses a local keyDown monitor and calls `HotKeyCenter.suspend()` first, so the
+    current combo is captured instead of fired. Esc cancels. Conflicts are rejected.
+  - `HotKeyCenter.rebind()` is diff-based: unchanged registrations are kept. That matters,
+    because opening the lens on a held ⌃⌥M rebinds, and re-registering ⌃⌥M would lose its release
+    event (breaking hold-to-magnify).
+  - Combos another app owns fail to register and show ⚠ (`ShortcutStore.unavailable`).
+  - Carbon hot key IDs: 1–6, 8 and 9 for the actions, 7 for the fixed Esc.
+  - Carbon also defines `EventModifiers`, so write `SwiftUI.EventModifiers` in files that
+    import Carbon.
+  - A tap of the magnifier key toggles the lens. Holding it for 0.35 s or more makes it
+    momentary (`kEventHotKeyReleased`). The lens ring has no shadow, at the user's request. Open, close and hotkey
   presses are logged with NSLog (`Screen Pointer: magnifier …`) for diagnosis. If another app holds a combo, registration fails and the app
   logs `Screen Pointer: hotkey N is already taken`.
 
