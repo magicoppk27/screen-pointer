@@ -78,8 +78,6 @@ final class KeystrokeController {
         panel = p
         positionPanel()
         p.orderFrontRegardless()
-
-        pruneTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in self?.prune() }
     }
 
     private func disable() {
@@ -131,13 +129,29 @@ final class KeystrokeController {
             }
         }
         positionPanel()
+        startPruning()
+    }
+
+    /// Fades out old entries. Runs only while entries are visible, so an idle overlay costs no
+    /// wake-ups.
+    private func startPruning() {
+        guard pruneTimer == nil else { return }
+        let timer = Timer(timeInterval: 0.2, repeats: true) { [weak self] _ in self?.prune() }
+        timer.tolerance = 0.05
+        RunLoop.main.add(timer, forMode: .common)
+        pruneTimer = timer
     }
 
     private func prune() {
         let cutoff = Date().addingTimeInterval(-lifetime)
-        guard model.entries.contains(where: { $0.updated < cutoff }) else { return }
-        withAnimation(.easeIn(duration: 0.3)) {
-            model.entries.removeAll { $0.updated < cutoff }
+        if model.entries.contains(where: { $0.updated < cutoff }) {
+            withAnimation(.easeIn(duration: 0.3)) {
+                model.entries.removeAll { $0.updated < cutoff }
+            }
+        }
+        if model.entries.isEmpty {
+            pruneTimer?.invalidate()
+            pruneTimer = nil
         }
     }
 
@@ -202,10 +216,7 @@ struct KeystrokeOverlayView: View {
                     .truncationMode(.head)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(.black.opacity(0.72))
-                    )
+                    .overlayGlass(in: Capsule())
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }

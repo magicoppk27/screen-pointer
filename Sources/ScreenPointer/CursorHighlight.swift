@@ -51,12 +51,25 @@ final class CursorHighlightController {
             monitors.append(m)
         }
 
+        noteActivity()
+    }
+
+    /// Restarts the idle check. The timer stops once the halo has dimmed, so a still mouse
+    /// costs no wake-ups.
+    private func noteActivity() {
         lastActivity = Date()
-        idleTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            let idle = self.state.press == .none && Date().timeIntervalSince(self.lastActivity) > self.idleDelay
-            if idle != self.state.idle { self.state.idle = idle }
+        if state.idle { state.idle = false }
+        guard idleTimer == nil else { return }
+        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] timer in
+            guard let self else { return timer.invalidate() }
+            guard self.state.press == .none, Date().timeIntervalSince(self.lastActivity) > self.idleDelay else { return }
+            self.state.idle = true
+            timer.invalidate()
+            self.idleTimer = nil
         }
+        timer.tolerance = 0.05
+        RunLoop.main.add(timer, forMode: .common)
+        idleTimer = timer
     }
 
     private func hide() {
@@ -82,8 +95,7 @@ final class CursorHighlightController {
             break
         }
         move(to: NSEvent.mouseLocation)
-        lastActivity = Date()
-        if state.idle { state.idle = false }
+        noteActivity()
     }
 
     private func ripple(right: Bool) {

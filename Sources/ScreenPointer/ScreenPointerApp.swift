@@ -14,6 +14,10 @@ struct ScreenPointerApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        if let folder = Snapshots.requestedFolder {
+            Snapshots.run(into: folder) // review mode: no overlays, no hotkeys, settings untouched
+            return
+        }
         CursorHighlightController.shared.start()
         KeystrokeController.shared.start()
         HotKeyCenter.shared.register()

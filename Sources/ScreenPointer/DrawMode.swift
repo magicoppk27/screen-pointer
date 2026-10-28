@@ -86,15 +86,9 @@ final class DrawController {
         window.onUndo = { [weak self] in self?.model.undo() }
         canvas = window
 
-        let bar = InteractiveHostingView(rootView: DrawToolbarView(model: model, settings: .shared) { [weak self] in
-            self?.stop()
-        })
-        let size = bar.fittingSize
-        let panel = OverlayPanel(size: size)
-        panel.ignoresMouseEvents = false
-        panel.contentView = bar
+        let panel = Self.makeToolbarPanel(model: model) { [weak self] in self?.stop() }
         let vf = screen.visibleFrame
-        panel.setFrameOrigin(NSPoint(x: vf.midX - size.width / 2, y: vf.maxY - size.height - 12))
+        panel.setFrameOrigin(NSPoint(x: vf.midX - panel.frame.width / 2, y: vf.maxY - panel.frame.height - 12))
         toolbar = panel
 
         clickThroughSink = model.$clickThrough.sink { [weak window] on in
@@ -104,6 +98,15 @@ final class DrawController {
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
         panel.orderFrontRegardless()
+    }
+
+    /// The floating toolbar, also used by snapshot mode.
+    static func makeToolbarPanel(model: DrawModel, onClose: @escaping () -> Void) -> OverlayPanel {
+        let bar = InteractiveHostingView(rootView: DrawToolbarView(model: model, settings: .shared, onClose: onClose))
+        let panel = OverlayPanel(size: bar.fittingSize)
+        panel.ignoresMouseEvents = false
+        panel.contentView = bar
+        return panel
     }
 
     func stop() {
@@ -156,9 +159,11 @@ struct DrawCanvasView: View {
     @ObservedObject var settings: AppSettings
 
     var body: some View {
-        Canvas { ctx, _ in
-            for stroke in model.strokes { StrokeRenderer.draw(stroke, in: &ctx) }
-            if let current = model.current { StrokeRenderer.draw(current, in: &ctx) }
+        // Finished strokes sit in their own layer that redraws only when the list changes; only
+        // the stroke being drawn redraws on each mouse move.
+        ZStack {
+            CommittedStrokesLayer(strokes: model.strokes).equatable()
+            if let current = model.current { LiveStrokeLayer(stroke: current) }
         }
         .contentShape(Rectangle())
         .gesture(
@@ -196,6 +201,35 @@ struct DrawCanvasView: View {
         } else if let a = stroke.points.first, let b = stroke.points.last, hypot(b.x - a.x, b.y - a.y) > 2 {
             model.strokes.append(stroke)
         }
+    }
+}
+
+/// Committed strokes never change after they're added, so their ids decide equality and the
+/// layer skips redrawing while the live stroke changes. Never use it for the live stroke: its id
+/// stays the same while points are added, so it would stop updating (that caused a multi-second
+/// draw lag in 0.4.0 builds).
+private struct CommittedStrokesLayer: View, Equatable {
+    let strokes: [DrawStroke]
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.strokes.map(\.id) == rhs.strokes.map(\.id)
+    }
+
+    var body: some View {
+        Canvas { ctx, _ in
+            for stroke in strokes { StrokeRenderer.draw(stroke, in: &ctx) }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// The stroke being drawn. Not Equatable, so it redraws on every change.
+private struct LiveStrokeLayer: View {
+    let stroke: DrawStroke
+
+    var body: some View {
+        Canvas { ctx, _ in StrokeRenderer.draw(stroke, in: &ctx) }
+            .allowsHitTesting(false)
     }
 }
 
@@ -265,82 +299,108 @@ struct DrawToolbarView: View {
     private static let widths: [Double] = [2, 5, 10]
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 2) {
+            Image(systemName: "line.3.horizontal")
+                .rotationEffect(.degrees(90))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 18, height: 28)
+                .overlay(WindowDragHandle()) // on top, so a click on the grip always reaches it
+                .help("Drag to move the toolbar")
             ForEach(DrawTool.allCases) { tool in
                 ToolButton(symbol: tool.symbol, help: tool.label, selected: model.tool == tool) { model.tool = tool }
             }
             separator
             ForEach(Self.palette, id: \.self) { hex in
                 let color = Color(hex: hex)
-                let selected = color.hexString == settings.drawColor.hexString
-                Button { settings.drawColor = color } label: {
-                    Circle()
-                        .fill(color)
-                        .overlay(Circle().strokeBorder(.secondary.opacity(0.5), lineWidth: 1))
-                        .frame(width: 18, height: 18)
-                        .padding(3)
-                        .overlay(Circle().strokeBorder(Color.accentColor, lineWidth: selected ? 2 : 0))
-                        .frame(width: 26, height: 30)
-                        .contentShape(Rectangle())
+                SwatchButton(color: color, selected: color.hexString == settings.drawColor.hexString) {
+                    settings.drawColor = color
                 }
-                .buttonStyle(.plain)
             }
             separator
             ForEach(Self.widths, id: \.self) { w in
-                Button { settings.drawLineWidth = w } label: {
-                    Circle()
-                        .fill(.primary)
-                        .frame(width: w + 3, height: w + 3)
-                        .frame(width: 26, height: 30)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7)
-                                .fill(settings.drawLineWidth == w ? Color.accentColor.opacity(0.25) : .clear)
-                        )
-                        .contentShape(Rectangle())
+                ToolButton(help: "Line width \(Int(w))", selected: settings.drawLineWidth == w) {
+                    settings.drawLineWidth = w
+                } label: {
+                    Circle().fill(.primary).frame(width: w + 3, height: w + 3)
                 }
-                .buttonStyle(.plain)
-                .help("Line width \(Int(w))")
             }
             separator
             ToolButton(symbol: "arrow.uturn.backward", help: "Undo (⌘Z)") { model.undo() }
-            ToolButton(symbol: "trash", help: "Clear") { model.clear() }
+            ToolButton(symbol: "trash", help: "Clear all drawings") { model.clear() }
             ToolButton(symbol: model.clickThrough ? "hand.point.up.left.fill" : "hand.point.up.left",
                        help: "Click through to apps (drawings stay)",
                        selected: model.clickThrough) { model.clickThrough.toggle() }
             ToolButton(symbol: "xmark", help: "Exit drawing (Esc or right-click)", action: onClose)
         }
-        .padding(6)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor))
-                .shadow(color: .black.opacity(0.25), radius: 8, y: 2)
-        )
-        .padding(12)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(WindowDragHandle()) // empty spots on the bar drag it too
+        .controlGlass(in: Capsule())
+        .glassGroup()
+        .padding(14) // room for the glass shadow inside the panel
     }
 
     private var separator: some View {
-        Divider().frame(height: 22).padding(.horizontal, 4)
+        Divider().frame(height: 18).padding(.horizontal, 4)
     }
 }
 
-private struct ToolButton: View {
-    let symbol: String
+private struct ToolButton<Label: View>: View {
     let help: String
     var selected = false
     let action: () -> Void
+    @ViewBuilder let label: () -> Label
+    @StateObject private var hover = HoverState()
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 14, weight: .semibold))
-                .frame(width: 30, height: 30)
-                .background(
-                    RoundedRectangle(cornerRadius: 7)
-                        .fill(selected ? Color.accentColor.opacity(0.25) : .clear)
-                )
-                .contentShape(Rectangle())
+            label()
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(fill))
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .onHover { hover.isHovering = $0 }
         .help(help)
+        .accessibilityLabel(help)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private var fill: Color {
+        if selected { return Color.accentColor.opacity(0.28) }
+        return hover.isHovering ? Color.primary.opacity(0.1) : .clear
+    }
+}
+
+extension ToolButton where Label == AnyView {
+    init(symbol: String, help: String, selected: Bool = false, action: @escaping () -> Void) {
+        self.init(help: help, selected: selected, action: action) {
+            AnyView(Image(systemName: symbol).font(.system(size: 13, weight: .semibold)))
+        }
+    }
+}
+
+private struct SwatchButton: View {
+    let color: Color
+    let selected: Bool
+    let action: () -> Void
+    @StateObject private var hover = HoverState()
+
+    var body: some View {
+        Button(action: action) {
+            Circle()
+                .fill(color)
+                .overlay(Circle().strokeBorder(.primary.opacity(0.25), lineWidth: 0.5))
+                .frame(width: hover.isHovering || selected ? 18 : 16, height: hover.isHovering || selected ? 18 : 16)
+                .padding(3)
+                .overlay(Circle().strokeBorder(Color.accentColor, lineWidth: selected ? 2 : 0))
+                .frame(width: 26, height: 28)
+                .contentShape(Rectangle())
+                .animation(.easeOut(duration: 0.12), value: hover.isHovering)
+        }
+        .buttonStyle(.plain)
+        .onHover { hover.isHovering = $0 }
+        .help(selected ? "Pen color (selected)" : "Pen color")
     }
 }

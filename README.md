@@ -113,6 +113,8 @@ Sources/ScreenPointer/
   KeystrokeOverlay.swift   Event tap + keystroke HUD
   DrawMode.swift           Canvas window, tools, renderer, toolbar
   HotKeys.swift            Carbon global hotkeys (press + release, diff-based rebinding)
+  Glass.swift              Liquid Glass helpers with macOS 14–15 fallbacks
+  Snapshots.swift          --snapshot review mode (light/dark PNGs of every surface)
   Shortcuts.swift          Editable shortcuts: model, persistence, recorder
   Magnifier.swift          ScreenCaptureKit lens
   SettingsWindow.swift     Settings UI

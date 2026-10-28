@@ -84,7 +84,7 @@ final class MagnifierController: NSObject, ObservableObject, SCStreamOutput, SCS
 
         lensLayer.magnificationFilter = .linear
         lensLayer.masksToBounds = true
-        lensLayer.backgroundColor = NSColor.black.cgColor
+        lensLayer.backgroundColor = nil // see-through until the first frame lands
         ringLayer.fillColor = nil
         ringLayer.strokeColor = NSColor.white.withAlphaComponent(0.9).cgColor
         applyLensSize()
@@ -201,7 +201,7 @@ final class MagnifierController: NSObject, ObservableObject, SCStreamOutput, SCS
                 config.minimumFrameInterval = CMTime(value: 1, timescale: 60)
                 config.pixelFormat = kCVPixelFormatType_32BGRA
                 config.showsCursor = false // the real cursor already sits at the lens centre
-                config.queueDepth = 4
+                config.queueDepth = 3 // the minimum; each full-screen frame is ~25 MB on Retina
 
                 let s = SCStream(filter: filter, configuration: config, delegate: self)
                 try s.addStreamOutput(self, type: .screen, sampleHandlerQueue: self.frameQueue)

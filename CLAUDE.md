@@ -87,9 +87,45 @@ user grants Input Monitoring once after the first install, and it then survives 
   `@ObservedObject`, `@Published`, `@Binding` and `@NSApplicationDelegateAdaptor` work.
 - These linker warnings are harmless; ignore them:
   `ld: warning: search path '/Library/Developer/CommandLineTools/Developer/...' not found`.
-- The settings window is a plain AppKit `NSWindow` hosting SwiftUI
-  (`SettingsWindowController`), because SwiftUI's `Settings` scene doesn't open reliably from a
-  menu-bar-only app.
+- The settings window is an AppKit `NSWindow` with an `NSTabViewController` (`.toolbar` tab
+  style), because SwiftUI's `Settings` scene doesn't open reliably from a menu-bar-only app.
+  - Tabs: Cursor, Keystrokes, Drawing, Magnifier, Shortcuts (`SettingsTab`). Each is one grouped
+    Form, 520 pt wide, with `.scrollDisabled` and `.fixedSize(vertical)`. `fitWindowToSelectedTab`
+    resizes the window to each tab, keeping its top edge in place.
+  - The window title follows the tab (`host.title`), and the last tab is remembered under the
+    UserDefaults key `settingsTab`.
+  - `makeFirstResponder(nil)` on open and on tab switch, so no focus ring shows.
+  - Help text goes in `SectionFooter` (leading-aligned, secondary): grouped-form footers are
+    otherwise trailing-aligned.
+  - "Restore defaults" buttons confirm with an NSAlert sheet. `@State` isn't available, so
+    `.confirmationDialog` is out.
+- Design (bama `mac-design`, direction A "Liquid Glass", chosen 2026-10-28): `Glass.swift` has
+  `controlGlass(in:)` (regular glass, for the draw toolbar capsule), `overlayGlass(in:)` (clear
+  glass with 35% black tint, for keystroke bubbles over screen content), and `glassGroup()`
+  (`GlassEffectContainer`). Each falls back to materials on macOS 14–15 via `#available(macOS 26, *)`.
+  - The draw toolbar is a glass capsule. It moves by its grip (`WindowDragHandle` →
+    `performDrag`), and its buttons have 28 pt circular hit areas with hover states (`HoverState`,
+    an ObservableObject, because `@State` doesn't compile with the CLT).
+- **Snapshot mode for UI review:** `"build/Screen Pointer.app/Contents/MacOS/ScreenPointer"` can't
+  be run directly for this; use `open -n -W "build/Screen Pointer.app" --args --snapshot <folder>`.
+  It writes `settings-<tab>-{light,dark}.png`, `toolbar-*.png` and `keystrokes-*.png` using
+  ScreenCaptureKit (the app's own Screen Recording grant), then quits. It registers no hotkeys and
+  changes no settings, so it can run next to the installed app. Overlays are captured over the
+  real screen. macOS may show a screen-recording confirmation dialog the first time, which the
+  user has to answer.
+- Performance rules (bama `performance`, measured 2026-10-28: 13 → 1 wakeups/s with the halo and
+  keystrokes on and the mouse still):
+  - Timers run only while something on screen needs them. The halo's idle timer stops once the
+    halo has dimmed, and the keystroke prune timer stops when no bubbles are left. Both have a
+    tolerance.
+  - Draw mode keeps finished strokes in their own `Equatable` canvas layer
+    (`CommittedStrokesLayer`), so only the live stroke (`LiveStrokeLayer`, not Equatable)
+    redraws on each mouse move. Never draw the live stroke with the id-compared layer: see
+    docs/FIXLOG.md. Snapshot mode's `draw-live-*.png` checks this.
+  - The magnifier's `queueDepth` is 3 (the minimum). Each full-screen BGRA frame is about 25 MB.
+  - `xctrace`/Instruments needs full Xcode. Measure with `top` (`csw`, not `idlew`, which reads
+    0), `ps`, `footprint`, `sample` and `leaks`, and check `HIDIdleTime` so that idle numbers are
+    only taken while the mouse is still.
 - The draw canvas window uses an almost-transparent background (alpha 0.01) on purpose.
   A fully clear window lets clicks through.
 - `swift build` alone gives a bare binary that macOS won't grant permissions to. Always go
